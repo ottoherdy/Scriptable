@@ -1,0 +1,135 @@
+// Time Remaining at Location Widget – Knightec
+
+const hassUrl       = "https://xokxdoluyc97mxtbuczk2xfuqywu3tte.ui.nabu.casa"
+const hassToken     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI4M2JhOGZiMjQwNjQ0OGNiOTkyMTk4NmJjYzQzOGRhYiIsImlhdCI6MTc3NjY2NjkyMCwiZXhwIjoyMDkyMDI2OTIwfQ.IJheP2NwpNl5HKBhJcbZ-k_yEMAyYKHYRFjM11N5IiI"
+const arrivalEntityId  = "input_datetime.arrival_time_fq"
+const checkoutEntityId = "input_datetime.checkout_time_fq"
+
+const bgColor   = "#1a1a1a"
+const textColor = "#ffffff"
+const padding   = 10
+
+const states      = await fetchStates([arrivalEntityId, checkoutEntityId])
+const arrivalRaw  = getState(states, arrivalEntityId)
+const checkoutRaw = getState(states, checkoutEntityId)
+const widget      = new ListWidget()
+
+widget.backgroundColor = new Color(bgColor)
+widget.setPadding(padding, padding, padding, padding)
+
+const stack = widget.addStack()
+stack.layoutVertically()
+stack.centerAlignContent()
+
+if (!checkoutRaw || !arrivalRaw) {
+  const el = stack.addText("Ingen tid")
+  el.font = Font.mediumRoundedSystemFont(14)
+  el.textColor = new Color(textColor)
+  el.centerAlignText()
+} else {
+  const arrivalDate  = parseHADatetime(arrivalRaw.state)
+  const checkoutDate = parseHADatetime(checkoutRaw.state)
+  const now          = new Date()
+  const totalMs      = checkoutDate - arrivalDate
+  const diffMs       = checkoutDate - now
+  const progress     = Math.max(0, Math.min(1, diffMs / totalMs))
+
+  if (diffMs <= 0) {
+    const doneEl = stack.addText("Dags att ga!")
+    doneEl.font = Font.boldRoundedSystemFont(16)
+    doneEl.textColor = new Color(textColor)
+    doneEl.centerAlignText()
+  } else {
+    const totalMinutes = Math.floor(diffMs / 60000)
+    const hours        = Math.floor(totalMinutes / 60)
+    const minutes      = totalMinutes % 60
+    const timeStr      = hours > 0
+      ? hours + "h " + String(minutes).padStart(2, "0") + "m"
+      : minutes + " min"
+
+    const size      = 110
+    const lineWidth = 10
+    const ctx       = new DrawContext()
+    ctx.size        = new Size(size, size)
+    ctx.opaque      = false
+    ctx.respectScreenScale = true
+
+    const cx = size / 2
+    const cy = size / 2
+    const r  = (size / 2) - lineWidth
+
+    // Bakgrundscirkel
+    ctx.setStrokeColor(new Color("#333333"))
+    ctx.setLineWidth(lineWidth)
+    ctx.strokeEllipse(new Rect(lineWidth, lineWidth, size - lineWidth * 2, size - lineWidth * 2))
+
+    // Fast orange
+    const hex = "#F47920"
+
+    // Rita segment
+    const segments   = 60
+    const filled     = Math.round(progress * segments)
+    const startAngle = -Math.PI / 2
+
+    ctx.setFillColor(new Color(hex))
+    for (let i = 0; i < filled; i++) {
+      const angle = startAngle + (i / segments) * Math.PI * 2
+      const x = cx + r * Math.cos(angle)
+      const y = cy + r * Math.sin(angle)
+      ctx.fillEllipse(new Rect(x - lineWidth/2, y - lineWidth/2, lineWidth, lineWidth))
+    }
+
+    // Tid i mitten
+    ctx.setFont(Font.boldRoundedSystemFont(hours > 0 ? 20 : 24))
+    ctx.setTextColor(new Color(textColor))
+    ctx.setTextAlignedCenter()
+    ctx.drawTextInRect(timeStr, new Rect(0, cy - 16, size, 32))
+
+    const imgEl = stack.addImage(ctx.getImage())
+    imgEl.centerAlignImage()
+
+    // Sluttid
+    stack.addSpacer(4)
+    const checkoutHHMM = checkoutDate.getHours() + ":" + String(checkoutDate.getMinutes()).padStart(2, "0")
+    const endEl = stack.addText("slutar " + checkoutHHMM)
+    endEl.font = Font.mediumRoundedSystemFont(11)
+    endEl.textColor = new Color(textColor, 0.65)
+    endEl.centerAlignText()
+  }
+}
+
+widget.refreshAfterDate = new Date(Date.now() + 60 * 1000)
+Script.setWidget(widget)
+Script.complete()
+widget.presentSmall()
+
+function parseHADatetime(raw) {
+  if (!raw) return null
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    const today = new Date()
+    const parts = raw.split(":")
+    today.setHours(Number(parts[0]), Number(parts[1]), Number(parts[2] || 0), 0)
+    return today
+  }
+  return new Date(raw.replace(" ", "T"))
+}
+
+async function fetchStates(entityIds) {
+  const results = []
+  for (const id of entityIds) {
+    const req = new Request(hassUrl + "/api/states/" + id)
+    req.headers = {
+      "Authorization": "Bearer " + hassToken,
+      "content-type": "application/json"
+    }
+    try {
+      const s = await req.loadJSON()
+      if (s && s.entity_id) results.push(s)
+    } catch(e) {}
+  }
+  return results
+}
+
+function getState(states, entityId) {
+  return states.find(function(s) { return s.entity_id === entityId })
+}
