@@ -34,11 +34,23 @@ if (!checkoutRaw || !arrivalRaw) {
   const diffMs       = checkoutDate - now
   const progress     = Math.max(0, Math.min(1, diffMs / totalMs))
 
-  if (diffMs <= 0) {
-    const doneEl = stack.addText("Dags att ga!")
-    doneEl.font = Font.boldRoundedSystemFont(16)
-    doneEl.textColor = new Color(textColor)
+if (diffMs <= 0) {
+    const overMs      = Math.abs(diffMs)
+    const overMinutes = Math.floor(overMs / 60000)
+    const overHours   = Math.floor(overMinutes / 60)
+    const overMins    = overMinutes % 60
+    const overStr     = "+" + overHours + "h " + String(overMins).padStart(2, "0") + "m"
+
+    const doneEl = stack.addText(overStr)
+    doneEl.font = Font.boldRoundedSystemFont(28)
+    doneEl.textColor = new Color("#F47920")
     doneEl.centerAlignText()
+
+    stack.addSpacer(4)
+    const subEl = stack.addText("efter sluttid")
+    subEl.font = Font.mediumRoundedSystemFont(11)
+    subEl.textColor = new Color(textColor, 0.65)
+    subEl.centerAlignText()
   } else {
     const totalMinutes = Math.floor(diffMs / 60000)
     const hours        = Math.floor(totalMinutes / 60)
